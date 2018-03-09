@@ -4,33 +4,37 @@ import random
 
 import torch
 import torch.utils.data as data
+import torchvision
 import torchvision.transforms as transforms
 
 from PIL import Image
 from dataencoder import DataEncoder
+from utils import resize
+import matplotlib.pyplot as plt
 
 
 def default_loader(path):
-    return Image.open(path).convert('RGB')
+    return Image.open(path).convert("RGB")
 
 
 class VocDataset(data.DataLoader):
     def __init__(self, root, annotation_file, input_size, train=True, transform=None,
                  target_transform=None, loader=default_loader):
+        # type: (object, object, object, object, object, object, object) -> object
         self.root = root
-        self.label_file = label_file
+        self.annotation_file = annotation_file
         self.input_size = input_size
         self.train = train
         self.transform = transform
         self.target_transform = target_transform
-        self.loader = loader
+        self.loader = default_loader
         self.encoder = DataEncoder()
 
         self.imgs = []
         self.labels = []
         self.bboxes = []
 
-        with open(annotation_file) as f:
+        with open(self.annotation_file) as f:
             lines = f.readlines()
             for line in lines:
                 annotation = line.strip().split()
@@ -46,12 +50,13 @@ class VocDataset(data.DataLoader):
                 self.bboxes.append(torch.FloatTensor(bbox))
                 self.labels.append(torch.LongTensor(label))
 
-    def __getitem(self, index):
+    def __getitem__(self, index):
         img_name = self.imgs[index]
         img = self.loader(os.path.join(self.root, img_name))
-        bboxes = self.bboxes[index]
+        bboxes = self.bboxes[index].clone()
         labels = self.labels[index]
         size = self.input_size
+        img, bboxes = resize(img, bboxes, size)
 
         # data_argumentation
 
@@ -65,10 +70,10 @@ class VocDataset(data.DataLoader):
         bboxes = [x[1] for x in batch]
         labels = [x[2] for x in batch]
 
-        [h, w] = self.input_size
+        w, h = self.input_size
         imgs_num = len(imgs)
 
-        input = torch.zero(imgs_num, 3, h, w)
+        input = torch.zeros(imgs_num, 3, h, w)
         target_locs = []
         target_clses = []
         for i in xrange(imgs_num):
